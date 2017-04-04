@@ -150,6 +150,7 @@ MBLayoutPtr SequencePacker::PackDenseStream(const StreamBatch& batch, size_t str
 
     // Iterate over sequences in the layout, copy samples from the
     // source sequences into the buffer (at appropriate offsets).
+#pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < sequenceInfos.size(); ++i)
     {
         const auto& sequenceInfo = sequenceInfos[i];
