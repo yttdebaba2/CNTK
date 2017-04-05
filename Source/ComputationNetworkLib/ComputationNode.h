@@ -1794,7 +1794,7 @@ public:
 
             // Release the Value matrix only if the output value is needed during backprop
             // since in the case it isn't used, we release it during forward prop itself
-            if (IsOutputNeededDuringBackprop() && m_value->GetMatrixType() != SPARSE && IsValueSharable())
+            if (IsOutputNeededDuringBackprop() && !m_isValueSparse && IsValueSharable())
                 ReleaseMatrixToPool(m_value, matrixPool);
         }
     }
