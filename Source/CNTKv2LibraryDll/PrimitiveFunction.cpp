@@ -840,6 +840,18 @@ namespace CNTK
 
     static const std::wstring s_primitiveFunctionTypeValue = L"PrimitiveFunction";
 
+    static vector<DictionaryValue> GetInputUids(const Function& f)
+    {
+        auto inputs = f.Inputs();
+        vector<DictionaryValue> inputUids;
+        inputUids.reserve(inputs.size());
+        for (auto& input : inputs)
+        {
+            inputUids.push_back(input.Uid());
+        }
+        return inputUids;
+    }
+
     /*virtual*/ Dictionary PrimitiveFunction::Serialize() const 
     {
         Dictionary dict;
@@ -851,16 +863,8 @@ namespace CNTK
         dict[uidKey] = Uid();
         if (!Name().empty())
             dict[nameKey] = Name();
-        
-        auto inputs = Inputs();
-        vector<DictionaryValue> inputUids;
-        inputUids.reserve(inputs.size());
-        for (auto& input : inputs)
-        {
-            inputUids.push_back(input.Uid());
-        }
 
-        dict[inputsKey] = std::move(inputUids);
+        dict[inputsKey] = std::move(GetInputUids(*this));
 
         if (m_op == PrimitiveOpType::Block)
         {
@@ -883,6 +887,28 @@ namespace CNTK
         }
 
         return dict;
+    }
+
+    static std::vector<Variable> GetInputVariables(const Dictionary& dict, const unordered_map<wstring, Variable>& uidToVariableMap, size_t currentSerializationVersion)
+    {
+        const auto& inputUids = dict[inputsKey].Value<vector<DictionaryValue>>();
+
+        vector<Variable> inputs;
+        inputs.reserve(inputUids.size());
+
+        for (const auto& dictionaryValue : inputUids)
+        {
+            const auto& inputUid = dictionaryValue.Value<std::wstring>();
+            if (uidToVariableMap.find(inputUid) == uidToVariableMap.end())
+            {
+                auto version = dict[versionKey].Value<size_t>();
+                CNTK::LogicError("There are no inputs corresponding to input uid = '%ls' (%s).",
+                    inputUid.c_str(), GetVersionsString<PrimitiveFunction>(currentSerializationVersion, version).c_str());
+            }
+            inputs.push_back(uidToVariableMap.at(inputUid));
+        }
+
+        return inputs;
     }
 
     /*static*/ FunctionPtr PrimitiveFunction::Deserialize(const Dictionary& dict, 
@@ -912,21 +938,7 @@ namespace CNTK
         if (dict.Contains(nameKey))
             name = dict[nameKey].Value<std::wstring>();
         auto attributes = dict[attributesKey].Value<Dictionary>();
-        const auto& inputUids = dict[inputsKey].Value<vector<DictionaryValue>>();
 
-        std::vector<Variable> inputs;
-        inputs.reserve(inputUids.size());
-
-        for (const auto& dictionaryValue : inputUids)
-        {
-            const auto& inputUid = dictionaryValue.Value<std::wstring>();
-            if (uidToVariableMap.find(inputUid) == uidToVariableMap.end())
-            {
-                CNTK::LogicError("There are no inputs corresponding to input uid = '%ls' (%s).",
-                                 inputUid.c_str(), GetVersionsString<PrimitiveFunction>(s_serializationVersion, version).c_str());
-            }
-            inputs.push_back(uidToVariableMap.at(inputUid));
-        }
 
         if (op == PrimitiveOpType::Block)
         {
@@ -958,6 +970,7 @@ namespace CNTK
                                                   [](BlockFunction* ptr) { delete ptr; });
         }
 
+        auto inputs = GetInputVariables(dict, uidToVariableMap, s_serializationVersion);
 
         if (version < 4 && op == PrimitiveOpType::BatchNormalization)
         {
@@ -1093,5 +1106,61 @@ namespace CNTK
             dummyOutputVariable.m_dataFields->m_shape = BinaryElementwiseOpOutputShape(op, dummyOutputVariable, operand, broadcastAllowed, inferInputDimensions);
 
         return dummyOutputVariable.Shape();
+    }
+
+    static const std::wstring s_userDefineFunctionTypeValue = L"UserDefinedFunction";
+
+    /*static*/ bool UDFUtils::isUDF(const FunctionPtr& f)
+    {
+        return (dynamic_cast<const PrimitiveFunction*>(f.get()) == nullptr);
+    }
+
+    /*static*/ bool UDFUtils::isUDF(const Dictionary& dict)
+    {
+        return (dict.Contains(typeKey) && dict[typeKey].Value<std::wstring>() == s_userDefineFunctionTypeValue);
+    }
+
+    /*static*/ Dictionary UDFUtils::Serialize(const FunctionPtr& udf)
+    {
+        Dictionary dict;
+        dict[versionKey] = s_serializationVersion;
+        dict[typeKey] = s_userDefineFunctionTypeValue;
+        dict[uidKey] = udf->Uid();
+        if (!udf->Name().empty())
+            dict[nameKey] = udf->Name();
+        dict[inputsKey] = std::move(GetInputUids(*udf));
+        dict[userDefineStateKey] = udf->Serialize();
+        return dict;
+    }
+
+    /*static*/ FunctionPtr UDFUtils::Deserialize(const Dictionary& dict,
+                                                 const unordered_map<std::wstring, Variable>& uidToVariableMap,
+                                                 const DeviceDescriptor& device,
+                                                 const UDFDeserializerPtr& deserializer)
+    {
+        static const vector<std::wstring> s_requiredDictionaryKeys = { typeKey, uidKey, inputsKey, userDefineStateKey };
+        ValidateDictionary<PrimitiveFunction>(dict, s_requiredDictionaryKeys, s_userDefineFunctionTypeValue, s_serializationVersion);
+
+        const auto& uid = dict[uidKey].Value<std::wstring>();
+        std::wstring name = L"";
+        if (dict.Contains(nameKey))
+            name = dict[nameKey].Value<std::wstring>();
+
+        auto inputs = GetInputVariables(dict, uidToVariableMap, s_serializationVersion);
+
+        auto state = dict[userDefineStateKey].Value<Dictionary>();
+
+        if (deserializer == nullptr) 
+        {
+            RuntimeError("No deserializer was provided to reconstruct UserDefinedFunctions.");
+        }
+
+        auto udf = deserializer->Deserialize(inputs, name, state);
+
+        // Restore the original uid, which other functions in the graph depend on
+        // (their inputs refer to the uids of this UDF outputs, which are generated base on the uid of this UDF).
+        udf->m_uid = uid;
+        
+        return udf;
     }
 }

@@ -691,4 +691,22 @@ namespace CNTK
         // Version 10: Add Pow operator.
         static const size_t s_serializationVersion = 10;
     };
+
+    class UDFUtils
+    {
+    public:
+
+        static bool isUDF(const FunctionPtr& f);
+
+        static bool isUDF(const Dictionary& dict);
+
+        static Dictionary Serialize(const FunctionPtr& dictionary);
+
+        static FunctionPtr Deserialize(const Dictionary& dictionary,
+            const std::unordered_map<std::wstring, Variable>& uidToVariableMap,
+            const CNTK::DeviceDescriptor& device,
+            const UDFDeserializerPtr& deserializer);
+
+        static const size_t s_serializationVersion = 0;
+    };
 }
