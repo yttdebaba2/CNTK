@@ -3185,6 +3185,21 @@ namespace CNTK
         CNTK_API std::wstring AsString(bool doNotInferOutputs = true) const;
 
         ///
+        /// Allows to change the dropout rate of a dropout function (this can only be invoked on a
+        /// function instance returned from the Dropout() method or a primitive dropout function 
+        /// returned from FindByName()).
+        ///
+        CNTK_API void SetDropoutRate(double dropoutRate);
+
+        ///
+        /// Allows to change the seed of a stateful function, i.e., Dropout, RandomSample or
+        /// RandomSampleInclusionFrequency (this can only be invoked on a
+        /// function instance returned from the Dropout(), RandomSample(), RandomSampleInclusionFrequency() 
+        /// method or a corresponding primitive function returned from FindByName()).
+        ///
+        CNTK_API void SetRandomSeed(size_t seed);
+
+        ///
         /// Maximum number of outputs that is currently supported.
         ///
         static const int MaxNumOutputs = 64;

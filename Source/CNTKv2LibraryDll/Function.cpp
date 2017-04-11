@@ -914,6 +914,28 @@ namespace CNTK
         return wss.str();
     }
 
+    void Function::SetDropoutRate(double dropoutRate)
+    {
+        Function* functionPtr = !(this->IsComposite()) ? this : this->RootFunction().get();
+        PrimitiveFunction* primitiveFunctionPtr = dynamic_cast<PrimitiveFunction*>(functionPtr);
+        if (primitiveFunctionPtr->OpType() != PrimitiveOpType::Dropout) 
+            LogicError("SetDropoutRate cannot be invoked on '%ls' function.", primitiveFunctionPtr->OpName());
+
+        primitiveFunctionPtr->m_attributes[PrimitiveFunction::AttributeNameDropoutRate] = dropoutRate;
+    }
+
+    void Function::SetRandomSeed(size_t seed)
+    {
+        Function* functionPtr = !(this->IsComposite()) ? this : this->RootFunction().get();
+        PrimitiveFunction* primitiveFunctionPtr = dynamic_cast<PrimitiveFunction*>(functionPtr);
+        if (!(primitiveFunctionPtr->OpType() == PrimitiveOpType::Dropout ||
+              primitiveFunctionPtr->OpType() == PrimitiveOpType::RandomSample ||
+              primitiveFunctionPtr->OpType() == PrimitiveOpType::RandomSampleInclusionFrequency))
+            LogicError("SetRandomSeed cannot be invoked on '%ls' function.", primitiveFunctionPtr->OpName());
+
+        primitiveFunctionPtr->m_attributes[PrimitiveFunction::AttributeNameRngSeed] = seed;
+    }
+
     FunctionPtr UnaryOp(PrimitiveOpType op, const Variable& operand, Dictionary&& opConfig, const std::wstring& name)
     {
         std::vector<Variable> operands = { operand };
@@ -1859,6 +1881,5 @@ namespace CNTK
 
             return BinaryOp(PrimitiveOpType::Convolution, convolutionMap, operand, std::move(additionalProperties), name);
         }
-
     }
 }

@@ -317,6 +317,8 @@ namespace CNTK
 
         // A map from Variable objects to ComputationNode objects in the ComputationNetwork instance that implements 'this' Composite Function
         std::unordered_map<Variable, Microsoft::MSR::CNTK::ComputationNodeBasePtr> m_variableToNodeMap;
+        // A map from ComputationNode objects to Variable objects (reverse of the map above).
+        std::unordered_map<Microsoft::MSR::CNTK::ComputationNodeBasePtr, Variable> m_nodeToVariableMap;
 
         // A map that tells whether a Variable in the graph underlying 'this' Function is a root of the graph
         std::unordered_map<Variable, bool> m_isVariableRootMap;

@@ -1236,6 +1236,8 @@ namespace CNTK
                                     AsString().c_str(), outputVar.AsString().c_str(), outputShape.AsString().c_str(), ((std::string)computationNodeSampleLayout).c_str());
                     }
                 }
+
+                m_nodeToVariableMap[varNodePair.second] = varNodePair.first;
             }
 
             // Record the timestamps of Parameter values
@@ -1565,8 +1567,29 @@ namespace CNTK
         // w.r.t. inputs to force evaluation in each minibatch
         list<ComputationNodeBasePtr> dropoutNodes = m_computationNetwork->GetNodesWithType(OperationNameOf(DropoutNode));
         for (auto& nodeIter : dropoutNodes)
+        {
             nodeIter->SetEvalTimeStampOutdatedWrtAll();
-        
+
+            auto function = m_nodeToVariableMap[nodeIter].Owner();
+            auto dropoutRate = function->m_attributes[PrimitiveFunction::AttributeNameDropoutRate].Value<double>();
+            auto dropoutPtr = dynamic_cast<DropoutNodeBase*>(nodeIter.get());
+            if (dropoutPtr->GetDropoutRate() != dropoutRate) {
+                dropoutPtr->SetDropoutRate(dropoutRate);
+            }
+        }
+
+        list<ComputationNodeBasePtr> rngUserNodes = m_computationNetwork->GetNodesWithType<RngUser>();
+        for (auto& nodeIter : rngUserNodes)
+        {
+            auto function = m_nodeToVariableMap[nodeIter].Owner();
+            auto seed = function->m_attributes[PrimitiveFunction::AttributeNameRngSeed].Value<size_t>();
+            auto rngUserPtr = dynamic_cast<RngUser*>(nodeIter.get());
+            if (rngUserPtr->GetRngSeed() != seed) {
+                nodeIter->SetEvalTimeStampOutdatedWrtAll();
+                rngUserPtr->SetRngState(seed);
+            }
+        }
+
         // Bump the timestamp of the parameter nodes whose values have changed
         for (auto& paramTimeStampRecord : m_lastRecordedParameterValueTimeStamps)
         {
