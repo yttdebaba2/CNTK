@@ -696,16 +696,16 @@ namespace CNTK
     {
     public:
 
-        static bool isUDF(const FunctionPtr& f);
+        static bool IsUDF(const FunctionPtr& f);
 
-        static bool isUDF(const Dictionary& dict);
+        static bool IsUDF(const Dictionary& dict);
 
         static Dictionary Serialize(const FunctionPtr& dictionary);
 
         static FunctionPtr Deserialize(const Dictionary& dictionary,
             const std::unordered_map<std::wstring, Variable>& uidToVariableMap,
             const CNTK::DeviceDescriptor& device,
-            const UDFDeserializerPtr& deserializer);
+            const UDFDeserializeCallback* callback);
 
         static const size_t s_serializationVersion = 0;
     };

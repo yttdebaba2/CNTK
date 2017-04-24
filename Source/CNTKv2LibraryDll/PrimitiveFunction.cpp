@@ -838,8 +838,6 @@ namespace CNTK
         }
     }
 
-    static const std::wstring s_primitiveFunctionTypeValue = L"PrimitiveFunction";
-
     static vector<DictionaryValue> GetInputUids(const Function& f)
     {
         auto inputs = f.Inputs();
@@ -852,20 +850,26 @@ namespace CNTK
         return inputUids;
     }
 
-    /*virtual*/ Dictionary PrimitiveFunction::Serialize() const 
+    static Dictionary SerializeCommonAttributes(const Function& f, size_t version, const wstring& functionType)
     {
         Dictionary dict;
+        dict[versionKey] = version;
+        dict[typeKey] = functionType;
+        dict[uidKey] = f.Uid();
+        if (!f.Name().empty())
+            dict[nameKey] = f.Name();
+        dict[inputsKey] = std::move(GetInputUids(f));
+        return dict;
+    }
 
-        dict[versionKey] = CurrentVersion();
-        dict[typeKey] = s_primitiveFunctionTypeValue;
+    static const std::wstring s_primitiveFunctionTypeValue = L"PrimitiveFunction";
+
+    /*virtual*/ Dictionary PrimitiveFunction::Serialize() const 
+    {
+        Dictionary dict = SerializeCommonAttributes(*this, CurrentVersion(), s_primitiveFunctionTypeValue);
         dict[opKey] = static_cast<size_t>(m_op);
         dict[attributesKey] = Attributes();
-        dict[uidKey] = Uid();
-        if (!Name().empty())
-            dict[nameKey] = Name();
-
-        dict[inputsKey] = std::move(GetInputUids(*this));
-
+        
         if (m_op == PrimitiveOpType::Block)
         {
             auto blockFunction = dynamic_cast<const BlockFunction*>(this);
@@ -1108,38 +1112,32 @@ namespace CNTK
         return dummyOutputVariable.Shape();
     }
 
-    static const std::wstring s_userDefineFunctionTypeValue = L"UserDefinedFunction";
+    static const std::wstring s_userDefinedFunctionTypeValue = L"UserDefinedFunction";
 
-    /*static*/ bool UDFUtils::isUDF(const FunctionPtr& f)
+    /*static*/ bool UDFUtils::IsUDF(const FunctionPtr& f)
     {
         return (dynamic_cast<const PrimitiveFunction*>(f.get()) == nullptr);
     }
 
-    /*static*/ bool UDFUtils::isUDF(const Dictionary& dict)
+    /*static*/ bool UDFUtils::IsUDF(const Dictionary& dict)
     {
-        return (dict.Contains(typeKey) && dict[typeKey].Value<std::wstring>() == s_userDefineFunctionTypeValue);
+        return (dict.Contains(typeKey) && dict[typeKey].Value<std::wstring>() == s_userDefinedFunctionTypeValue);
     }
 
     /*static*/ Dictionary UDFUtils::Serialize(const FunctionPtr& udf)
     {
-        Dictionary dict;
-        dict[versionKey] = s_serializationVersion;
-        dict[typeKey] = s_userDefineFunctionTypeValue;
-        dict[uidKey] = udf->Uid();
-        if (!udf->Name().empty())
-            dict[nameKey] = udf->Name();
-        dict[inputsKey] = std::move(GetInputUids(*udf));
-        dict[userDefineStateKey] = udf->Serialize();
+        Dictionary dict = SerializeCommonAttributes(*udf, s_serializationVersion, s_userDefinedFunctionTypeValue);
+        dict[userDefinedStateKey] = udf->Serialize();
         return dict;
     }
 
     /*static*/ FunctionPtr UDFUtils::Deserialize(const Dictionary& dict,
                                                  const unordered_map<std::wstring, Variable>& uidToVariableMap,
                                                  const DeviceDescriptor& device,
-                                                 const UDFDeserializerPtr& deserializer)
+                                                 const UDFDeserializeCallback* callback)
     {
-        static const vector<std::wstring> s_requiredDictionaryKeys = { typeKey, uidKey, inputsKey, userDefineStateKey };
-        ValidateDictionary<PrimitiveFunction>(dict, s_requiredDictionaryKeys, s_userDefineFunctionTypeValue, s_serializationVersion);
+        static const vector<std::wstring> s_requiredDictionaryKeys = { typeKey, uidKey, inputsKey, userDefinedStateKey };
+        ValidateDictionary<Function>(dict, s_requiredDictionaryKeys, s_userDefinedFunctionTypeValue, s_serializationVersion);
 
         const auto& uid = dict[uidKey].Value<std::wstring>();
         std::wstring name = L"";
@@ -1148,14 +1146,14 @@ namespace CNTK
 
         auto inputs = GetInputVariables(dict, uidToVariableMap, s_serializationVersion);
 
-        auto state = dict[userDefineStateKey].Value<Dictionary>();
+        auto state = dict[userDefinedStateKey].Value<Dictionary>();
 
-        if (deserializer == nullptr) 
+        if (callback == nullptr) 
         {
             RuntimeError("No deserializer was provided to reconstruct UserDefinedFunctions.");
         }
 
-        auto udf = deserializer->Deserialize(inputs, name, state);
+        auto udf = callback->operator()(inputs, name, state);
 
         // Restore the original uid, which other functions in the graph depend on
         // (their inputs refer to the uids of this UDF outputs, which are generated base on the uid of this UDF).

@@ -1367,7 +1367,7 @@ class UserFunctionDeserializer(cntk_py.UDFDeserializer):
         self.factory_callback_map = factory_callback_map
         self.__disown__()
 
-    def _deserialize(self, inputs, name, dictionary):
+    def __call__(self, inputs, name, dictionary):
         cls = dictionary['class']
         module = dictionary['module']
         state = dictionary['state']
