@@ -16,9 +16,13 @@ from cntk.train.training_session import *
 from cntk.logging import *
 from cntk.debugging import *
 
+
 # default Paths relative to current python file.
 abs_path   = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(abs_path)
 model_path = os.path.join(abs_path, "Models")
+
+from ConvNet_CIFAR10_DataAug import create_convnet_cifar10_model
 
 # model dimensions
 image_height = 32
@@ -55,7 +59,6 @@ def create_image_mb_source(map_file, mean_file, train, total_number_of_samples):
 
 # Create the network.
 def create_conv_network():
-
     # Input variables denoting the features and label data
     feature_var = cntk.input((num_channels, image_height, image_width))
     label_var = cntk.input((num_classes))
@@ -63,19 +66,7 @@ def create_conv_network():
     # apply model to input
     scaled_input = cntk.element_times(cntk.constant(0.00390625), feature_var)
 
-    with cntk.layers.default_options(activation=cntk.relu, pad=True):
-        z = cntk.layers.Sequential([
-            cntk.layers.For(range(2), lambda : [
-                cntk.layers.Convolution2D((3,3), 64),
-                cntk.layers.Convolution2D((3,3), 64),
-                cntk.layers.MaxPooling((3,3), (2,2))
-            ]),
-            cntk.layers.For(range(2), lambda i: [
-                cntk.layers.Dense([256,128][i]),
-                cntk.layers.Dropout(0.5)
-            ]),
-            cntk.layers.Dense(num_classes, activation=None)
-        ])(scaled_input)
+    z = create_convnet_cifar10_model(num_classes)(scaled_input)
 
     # loss and metric
     ce = cntk.cross_entropy_with_softmax(z, label_var)
@@ -90,7 +81,6 @@ def create_conv_network():
         'pe' : pe,
         'output': z
     }
-
 
 # Create trainer
 def create_trainer(network, epoch_size, num_quantization_bits, block_size, warm_up, progress_writers):
