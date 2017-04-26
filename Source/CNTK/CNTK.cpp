@@ -605,6 +605,9 @@ int wmainWithBS(int argc, wchar_t* argv[]) // called from wmain which is a wrapp
     LOGPRINTF(stderr, "__COMPLETED__\n");
     fflush(stderr);
 
+    // In case of success, finalizing the mpi if necessary.
+    if (mpi)
+        mpi->Finalize();
     return EXIT_SUCCESS;
 }
 
@@ -781,6 +784,8 @@ int wmainOldCNTKConfig(int argc, wchar_t* argv[])
         fprintf(stderr, "COMPLETED.\n");
     fflush(stderr);
 
+    if (mpi)
+        mpi->Finalize();
     return EXIT_SUCCESS;
 }
 

@@ -472,8 +472,6 @@ MPIWrapperMpi::~MPIWrapperMpi()
             RuntimeError("MPIWrapperMpi: Failed to flush stderr, %d", errno);
 #endif
         }
-
-        Finalize();
     }
 }
 
