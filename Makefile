@@ -342,6 +342,7 @@ READER_SRC =\
 	$(SOURCEDIR)/Readers/ReaderLib/ReaderBase.cpp \
 	$(SOURCEDIR)/Readers/ReaderLib/Indexer.cpp \
 	$(SOURCEDIR)/Readers/ReaderLib/MemoryBuffer.cpp \
+	$(SOURCEDIR)/Readers/ReaderLib/DataDeserializerBase.cpp \
 	$(SOURCEDIR)/Readers/ReaderLib/ChunkCache.cpp \
 	$(SOURCEDIR)/Readers/ReaderLib/ReaderUtil.cpp \
 
