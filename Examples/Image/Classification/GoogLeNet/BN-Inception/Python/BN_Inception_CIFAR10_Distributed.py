@@ -14,15 +14,14 @@ import _cntk_py
 
 import cntk.io.transforms as xforms
 from cntk.debugging import start_profiler, stop_profiler
-from cntk.train.distributed import data_parallel_distributed_learner, Communicator
-from cntk.train import training_session, CheckpointConfig, TestConfig, Trainer
 from cntk.learners import learning_rate_schedule, momentum_schedule, momentum_sgd, UnitType
 from cntk.logging import ProgressPrinter, log_number_of_parameters
 from cntk.ops import input
 from cntk.io import ImageDeserializer, MinibatchSource, StreamDef, StreamDefs, FULL_DATA_SWEEP
-from cntk.debugging import *
+from cntk.train.distributed import data_parallel_distributed_learner, Communicator
+from cntk.train import training_session, CheckpointConfig, TestConfig, Trainer
 
-from BN_Inception_CIFAR10 import create_image_mb_source, create_bn_inception, train_and_test
+from BN_Inception_CIFAR10 import create_image_mb_source, create_bn_inception
 
 # default Paths relative to current python file.
 abs_path   = os.path.dirname(os.path.abspath(__file__))
@@ -70,6 +69,32 @@ def create_trainer(network, epoch_size, num_epochs, minibatch_size, num_quantiza
 
     # Create trainer
     return Trainer(network['output'], (network['ce'], network['pe']), parameter_learner, progress_printer)
+
+def train_and_test(network, trainer, train_source, test_source, max_epochs, minibatch_size, epoch_size, restore, profiler_dir):
+
+    # define mapping from intput streams to network inputs
+    input_map = {
+        network['feature']: train_source.streams.features,
+        network['label']: train_source.streams.labels
+    }
+
+    if profiler_dir:
+        start_profiler(profiler_dir, True)
+
+    training_session(
+        trainer=trainer, mb_source=train_source,
+        model_inputs_to_streams=input_map,
+        mb_size=minibatch_size,
+        progress_frequency=epoch_size,
+        checkpoint_config=CheckpointConfig(frequency=epoch_size,
+                                           filename = os.path.join(
+                                           model_path, "BN-Inception_CIFAR10"),
+                                           restore=restore),
+        test_config=TestConfig(source=test_source, mb_size=minibatch_size)
+    ).train()
+
+    if profiler_dir:
+        stop_profiler()
 
 # Train and evaluate the network.
 def bn_inception_train_and_eval(train_data, test_data, mean_data, num_quantization_bits=32, epoch_size=50000, max_epochs=200, minibatch_size=None,
@@ -153,5 +178,5 @@ if __name__=='__main__':
                              scale_up=bool(args['scale_up']),
                              profiler_dir=args['profilerdir'])
     finally:
-        os.chdir(data_path)
+        os.chdir(abs_path)
         Communicator.finalize()
