@@ -56,18 +56,18 @@ def variable_getter(sess, data):
 def conv2d_getter(sess):
     def _get(pd, attr):
         W = trainable_getter(sess)(pd.W)
-        if attr.has_bias:
+        if pd.b:
             b = trainable_getter(sess)(pd.b)
         else:
             b = None
-        return cstk.Conv2DArgs(W=W.transpose(3,0,1,2), b=b.reshape(attr.num_filters,1,1,))
+        return cstk.Conv2DArgs(W=W.transpose(2,0,1), b=b.reshape(attr.num_filters,))
     return _get
 
 def conv2d_setter(sess):
     def _set(pd, raw_value, attr):
-        trainable_setter(sess)(pd.W, raw_value.W.transpose(1,2,3,0))
-        if attr.has_bias:
-            trainable_setter(sess)(pd.b, raw_value.b.reshape(attr.num_filters,))
+        trainable_setter(sess)(pd.W, raw_value.W.transpose(1,2,0))
+        if pd.b:
+            trainable_setter(sess)(pd.b, raw_value.b)
     return _set
     
 def _adjust_forget_bias(all_bias, hidden_dim, forget_bias):

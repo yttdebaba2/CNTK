@@ -9,12 +9,15 @@ from cntk.contrib import crosstalk as cstk
 
 DictParameterType = 'DictParameter'
 
-def find_func_param(func, name=None, shape=None):
+def find_func_param(func, name=None, shape=None, allow_not_found=False):
     if len(func.parameters) == 1:
         return func.parameters[0]
     found = [p for p in func.parameters if (shape and p.shape == shape) or name == p.name]
     if not found:
-        raise Exception('param ({} {}) not found'.format(name, shape))
+        if allow_not_found:
+            return None
+        else:
+            raise Exception('param ({} {}) not found'.format(name, shape))
     if len(found) > 1:
         raise Exception('more than one found')
     return found[0]
@@ -50,19 +53,20 @@ def variable_getter(data):
 
 def conv2d_getter(f, attr):
     W = parameter_getter(find_func_param(f, shape=(attr.num_filters, 1,) + attr.filter_shape))
-    if attr.has_bias:
-        b = parameter_getter(find_func_param(f, shape=(attr.num_filters, 1, 1,)))
+    bias_param = find_func_param(f, shape=(attr.num_filters, 1, 1,), allow_not_found=True)
+    if bias_param:
+        b = parameter_getter(bias_param)
     else:
         b = None
-    return cstk.Conv2DArgs(W=W, b=b)
+    return cstk.Conv2DArgs(W=W[:,0,:,:], b=None if b is None else b.reshape(-1))
 
 def conv2d_setter(f, raw_value, attr):
     W = find_func_param(f, shape=(attr.num_filters, 1,) + attr.filter_shape)
-    parameter_setter(W, raw_value.W)
-    if attr.has_bias:
+    parameter_setter(W, raw_value.W.reshape(W.shape))
+    if raw_value.b is not None:
         b = find_func_param(f, shape=(attr.num_filters, 1, 1,))
-        parameter_setter(b, raw_value.b)
-        
+        parameter_setter(b, raw_value.b.reshape(b.shape))
+
 def _get_rnn_gates(op_type):
     num_gates = 1
     if op_type == 'lstm':

@@ -12,8 +12,10 @@ VarInfo = namedtuple('VarInfo', 'var type attr')
 FuncInfo = namedtuple('FuncInfo', 'setter getter')
 
 # attributes for high level blocks
-Conv2DAttr = namedtuple('Conv2DAttr', 'filter_shape num_filters has_bias')
+Conv2DAttr = namedtuple('Conv2DAttr', 'filter_shape num_filters')
 Conv2DArgs = namedtuple('Conv2DArgs', 'W b')
+#Conv2D filter shape (num_filters, filter_w, filter_h)
+#Conv2D bias shape (num_filters)
 
 RnnAttr = namedtuple('RnnAttr', 'bidirectional op_type input_dim hidden_dim forget_bias')
 RnnArgs = namedtuple('RnnArgs', 'fw_W fw_H fw_b bw_W bw_H bw_b')
