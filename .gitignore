@@ -245,6 +245,7 @@ bindings/java/JavaEvalTest/.idea
 bindings/java/JavaEvalTest/data
 bindings/java/**/target
 bindings/java/**/*.jar
+bindings/java/.idea/
 
 # Examples and Tutorials
 Examples/Image/DataSets/Pascal/VOC*
