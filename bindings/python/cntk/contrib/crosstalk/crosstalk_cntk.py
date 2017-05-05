@@ -190,6 +190,9 @@ def embed_setter(p, raw_value, attr):
     parameter_setter(p, np.asarray(out))
 
 class CNTKCrosstalk(cstk.Crosstalk):
+    '''
+    CNTK implementation for crosstalk
+    '''
     def __init__(self):
         super(CNTKCrosstalk, self).__init__()
         super(CNTKCrosstalk, self).register_funcs(C.variables.Parameter, setter=parameter_setter, getter=parameter_getter)
@@ -199,17 +202,29 @@ class CNTKCrosstalk(cstk.Crosstalk):
         super(CNTKCrosstalk, self).register_funcs(cstk.EmbedAttr, setter=embed_setter, getter=embed_getter)
 
     def set_data(self, data):
+        '''
+        Set mapped data for variable evaluation
+        '''
         super(CNTKCrosstalk, self).register_funcs(C.ops.functions.Function, getter=function_getter(data))
         super(CNTKCrosstalk, self).register_funcs(C.variables.Variable, getter=variable_getter(data))
 
     def is_param(self, name):
+        '''
+        Check if var with name is a parameter
+        '''
         var_type = self.vars[name].type
         return var_type not in [C.ops.functions.Function, C.variables.Variable]
 
     def load_all_params(self):
+        '''
+        Load all parameters from files
+        '''
         super(CNTKCrosstalk, self).load([n for n in self.vars.keys() if self.is_param(n)])
         
     def save_all_params(self):
+        '''
+        Save all parameters to files
+        '''
         super(CNTKCrosstalk, self).save([n for n in self.vars.keys() if self.is_param(n)])
 
 instance = CNTKCrosstalk()

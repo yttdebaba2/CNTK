@@ -43,51 +43,62 @@ def _compare_list_to_ndarray(list_value, ndarray_value, rtol, atol, equal_nan):
 
 class Crosstalk:
     '''
-    class to hold variables for debugging/conversion
+    Base class of Crosstalk. Crosstalk is a utility to manage variables for debugging/conversion across scripts in different toolkits.
+    
+    With crosstalk, user can define named watch points to variables or parameters, and setting up a work dir.
+    Then crosstalk can save/load variables to corresponding files from python debugger, and compare values using numpy.
+    Please refer to crosstalk unittests for examples of how to exchange/compare values between different toolkits.
     '''
     def __init__(self):
         self.funcs = {}
         self.reset()
 
     def set_workdir(self, dir):
+        '''
+        Set up a working directory for save/load numpy values(.npy) or python data (.pkl)
+        '''
         self.work_dir = dir
         if not os.path.exists(dir):
             os.makedirs(dir)
 
     def next_pass(self):
+        '''
+        Bump up passes so save won't overwrite existing files
+        '''
         self.passes += 1
 
-    '''
-    add variables to watch
-    '''
     def watch(self, var, name, var_type=None, attr=None):
+        '''
+        Add variables to watch with a unique name
+        File in working directory would be named <pass>_<name>.(npy|pkl)
+        '''
         if name in self.vars.keys():
             raise Exception('var with name {} already exists')
         self.vars[name] = VarInfo(var, var_type if var_type else type(var), attr)
 
-    '''
-    register setter/getter functions for var_type
-    '''
     def register_funcs(self, var_type, setter=None, getter=None):
+        '''
+        Register setter/getter functions for var_type
+        '''
         self.funcs[var_type] = FuncInfo(setter, getter)
 
     def _get_filename(self, name):
         return os.path.join(self.work_dir, '{}_{}'.format(self.passes, name))
 
-    '''
-    load raw value from npy file in work_dir
-    '''
     def load_raw_value(self, name):
+        '''
+        Load raw value from npy|pkl file in work_dir
+        '''
         if os.path.exists(self._get_filename(name)+'.npy'):
             return np.load(self._get_filename(name)+'.npy')
         elif os.path.exists(self._get_filename(name)+'.pkl'):
             with open(self._get_filename(name)+'.pkl', 'rb') as pkl:
                 return pickle.load(pkl)
 
-    '''
-    set value to var, with option to load from disk
-    '''
     def assign(self, name, value=None, load=False, load_name=None):
+        '''
+        Set value to var, with option to load from work_dir
+        '''
         if load and value:
             raise Exception('set_var can only have one source')
         var, var_type, attr = self.vars[name]
@@ -106,10 +117,10 @@ class Crosstalk:
                 raise Exception('set_var can only work on ndarray')
         self.funcs[var_type].setter(var, value, attr)
 
-    '''
-    evaluate var and optionally save to work_dir
-    '''
     def fetch(self, name, save=False):
+        '''
+        Evaluate var with name and optionally save to work_dir
+        '''
         var, var_type, attr = self.vars[name]
         raw_value = self.funcs[var_type].getter(var, attr)
         if save:
@@ -120,10 +131,10 @@ class Crosstalk:
                     pickle.dump(raw_value, pkl)
         return raw_value
         
-    '''
-    compare var value with work_dir
-    '''
     def compare(self, name, compare_name=None, rtol=1e-05, atol=1e-08, equal_nan=False):
+        '''
+        Compare var with name to value in file in work_dir. Specify compare_name if the file to compare is with a different name of var.
+        '''
         var, var_type, attr = self.vars[name]
         raw_value = self.funcs[var_type].getter(var, attr)
         gt_value = self.load_raw_value(compare_name if compare_name else name)
@@ -148,27 +159,27 @@ class Crosstalk:
         else:
             raise Exception('can only compare numpy.ndarray, list of numpy.ndarray or dict of numpy.ndarray')
 
-    '''
-    load vars in list of names
-    '''
     def load(self, names):
+        '''
+        Load vars in list of names
+        '''
         [self.assign(n, load=True) for n in names if n in self.vars.keys()]
             
-    '''
-    save vars in list
-    '''
     def save(self, names):
+        '''
+        Save vars in list
+        '''
         [self.fetch(n, save=True) for n in names if n in self.vars.keys()]
 
-    '''
-    save all vars
-    '''
     def save_all(self):
+        '''
+        Save all vars
+        '''
         self.save(self.vars.keys())
         
-    '''
-    reset all, setter/getter are kept
-    '''
     def reset(self):
+        '''
+        Reset all vars and passes, setter/getter are kept
+        '''
         self.vars = {}
         self.passes = 0

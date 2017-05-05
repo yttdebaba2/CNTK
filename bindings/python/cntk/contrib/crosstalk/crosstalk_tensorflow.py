@@ -123,10 +123,16 @@ def embed_setter(sess):
     return _set
 
 class TensorFlowCrosstalk(cstk.Crosstalk):
+    '''
+    TensorFlow implementation for crosstalk
+    '''
     def __init__(self):
         super(TensorFlowCrosstalk, self).__init__()
 
     def set_data(self, sess, data):
+        '''
+        Set session and mapped data for setter/getters
+        '''
         super(TensorFlowCrosstalk, self).register_funcs(TrainableType, setter=trainable_setter(sess), getter=trainable_getter(sess))
         super(TensorFlowCrosstalk, self).register_funcs(DictTrainableType, setter=dict_trainable_setter(sess), getter=dict_trainable_getter(sess))
         super(TensorFlowCrosstalk, self).register_funcs(VariableType, getter=variable_getter(sess, data))
@@ -135,13 +141,22 @@ class TensorFlowCrosstalk(cstk.Crosstalk):
         super(TensorFlowCrosstalk, self).register_funcs(cstk.EmbedAttr, setter=embed_setter(sess), getter=embed_getter(sess))
         
     def is_trainable(self, name):
+        '''
+        Check if variable with name is a trainable
+        '''
         var_type = self.vars[name].type
         return var_type != VariableType
         
     def load_all_trainables(self):
+        '''
+        Load all trainables from files
+        '''
         self.load([n for n in self.vars.keys() if self.is_trainable(n)])
 
     def save_all_trainables(self):
+        '''
+        Save all trainables to files
+        '''
         self.save([n for n in self.vars.keys() if self.is_trainable(n)])
 
 instance = TensorFlowCrosstalk()

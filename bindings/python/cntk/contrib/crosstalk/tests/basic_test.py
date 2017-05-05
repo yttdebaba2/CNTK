@@ -24,8 +24,8 @@ def cntk_baseline_basic():
     ci.reset()
 
 def tf_baseline_basic():
-    import tensorflow as tf # note this test runs with tensorflow 0.12
-    import cntk.contrib.crosstalk.crosstalk_tensorflow0_12 as crtf
+    import tensorflow as tf
+    import cntk.contrib.crosstalk.crosstalk_tensorflow as crtf
     ci = crtf.instance
 
     tf.reset_default_graph()
