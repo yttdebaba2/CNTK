@@ -12,6 +12,22 @@
 
 %include "CNTKManagedCommon.i"
 
+%pragma(java) jniclasscode=%{
+  static {
+    String libName = "Cntk.Core.JavaBinding-2.0rc2";
+    try {
+       System.loadLibrary(libName);
+    } catch (UnsatisfiedLinkError e) {
+       try {
+           System.loadLibrary(libName+'d');
+       } catch (UnsatisfiedLinkError e2) {
+          System.err.println("Native code library failed to load. \n" + e2);
+          System.exit(1);
+       }
+    }
+  }
+%}
+
 // Java specific extention.
 %typemap(javacode) CNTK::DeviceDescriptor %{
     public java.util.ArrayList<DeviceDescriptor> getAllDevices() {
