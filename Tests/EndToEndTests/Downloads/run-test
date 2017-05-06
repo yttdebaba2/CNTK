@@ -1,0 +1,33 @@
+#!/bin/bash
+
+cd ../../..
+
+downloaders=(
+  Examples/Image/DataSets/Animals/install_animals.py
+  Examples/Image/DataSets/CIFAR-10/install_cifar10.py
+  Examples/Image/DataSets/Flowers/install_flowers.py
+  Examples/Image/DataSets/Grocery/install_grocery.py
+  Examples/Image/DataSets/MNIST/install_mnist.py
+  Examples/Image/DataSets/MNIST/install_mnist.py
+  Examples/Image/DataSets/Pascal/install_pascalvoc.py
+)
+
+function exitWithError {
+  set +e +x
+  printf "$@" 1>&2
+  exit 1
+}
+
+set -e -x -o pipefail
+ERROR=0
+for p in "${downloaders[@]}"; do
+  [[ -f $p ]] || exitWithError "File %s does not exist\n" "$p"
+  # Make sure there's no previously downloaded data.
+  git clean -fdx "$(dirname "$p")" || exitWithError "Git clean failed\n"
+  python "$p" || {
+    echo Error: running $p failed
+    ((ERROR++))
+  }
+done
+
+((ERROR == 0)) && echo "__COMPLETED__"
