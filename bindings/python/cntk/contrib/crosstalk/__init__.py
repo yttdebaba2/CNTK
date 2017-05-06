@@ -41,7 +41,7 @@ def _compare_list_to_ndarray(list_value, ndarray_value, rtol, atol, equal_nan):
             break
     return match
 
-class Crosstalk:
+class Crosstalk(object):
     '''
     Base class of Crosstalk. Crosstalk is a utility to manage variables for debugging/conversion across scripts in different toolkits.
     

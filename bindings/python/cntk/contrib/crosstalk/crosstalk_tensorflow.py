@@ -3,6 +3,12 @@
 # for full license information.
 # ==============================================================================
 
+try:
+    import tensorflow as tf
+except ImportError:
+    import pip
+    pip.main(['install', '--user', 'tensorflow'])
+
 import tensorflow as tf
 import numpy as np
 from cntk.contrib import crosstalk as cstk
