@@ -18,16 +18,26 @@ function exitWithError {
   exit 1
 }
 
-set -e -x -o pipefail
-ERROR=0
+set -x
+
+# Test for existence and clean
 for p in "${downloaders[@]}"; do
-  [[ -f $p ]] || exitWithError "File %s does not exist\n" "$p"
-  # Make sure there's no previously downloaded data.
-  git clean -fdx "$(dirname "$p")" || exitWithError "Git clean failed\n"
+  [[ -f $p ]] || exitWithError "File %s does not exist.\n" "$p"
+  git clean -fdx "$(dirname "$p")" || exitWithError "Git clean for %s failed.\n" "$p"
+done
+
+ERRORS=0
+for p in "${downloaders[@]}"; do
   python "$p" || {
     echo Error: running $p failed
-    ((ERROR++))
+    ((ERRORS++))
   }
 done
 
-((ERROR == 0)) && echo "__COMPLETED__"
+if ((ERRORS != 0)); then
+  echo $ERRORS occurred.
+  exit 1
+else
+  set +x
+  echo __COMPLETED__
+fi
