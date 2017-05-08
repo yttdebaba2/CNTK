@@ -30,11 +30,6 @@ config_path = abs_path
 model_path = os.path.join(abs_path, "Models")
 log_dir = None
 
-# model dimensions
-image_height = 224
-image_width  = 224
-num_channels = 3  # RGB
-num_classes  = 1000
 model_name   = "BN-Inception.model"
 
 # Create trainer
@@ -86,7 +81,7 @@ def train_and_test(network, trainer, train_source, test_source, minibatch_size, 
         model_inputs_to_streams = input_map,
         mb_size = minibatch_size,
         progress_frequency = epoch_size,
-        checkpoint_config=CheckpointConfig(frequency=epoch_size, filename=os.path.join(model_path, model_name),                                   restore=restore),
+        checkpoint_config=CheckpointConfig(frequency=epoch_size, filename=os.path.join(model_path, model_name), restore=restore),
         test_config=TestConfig(source=test_source, mb_size=minibatch_size)
     ).train()
         
@@ -153,6 +148,7 @@ if __name__=='__main__':
     if not os.path.isdir(data_path):
         raise RuntimeError("Directory %s does not exist" % data_path)
 
+    current_path = os.getcwd()
     os.chdir(data_path)
 
     mean_data = os.path.join(data_path, '..', 'ImageNet1K_mean.xml')
@@ -161,15 +157,14 @@ if __name__=='__main__':
 
     try:
         bn_inception_train_and_eval(train_data, test_data, mean_data,
-                             epoch_size=args['epoch_size'],
-                             num_quantization_bits=args['quantized_bits'],
-                             max_epochs=args['num_epochs'],
-                             minibatch_size=args["minibatch_size"],
-                             restore=not args['restart'],
-                             log_to_file=args['logdir'],
-                             num_mbs_per_log=100,
-                             gen_heartbeat=True,
-                             scale_up=bool(args['scale_up']))
+                                    epoch_size=args['epoch_size'],
+                                    num_quantization_bits=args['quantized_bits'],
+                                    max_epochs=args['num_epochs'],
+                                    minibatch_size=args["minibatch_size"],
+                                    restore=not args['restart'],
+                                    log_to_file=args['logdir'],
+                                    num_mbs_per_log=100,
+                                    gen_heartbeat=True,
+                                    scale_up=bool(args['scale_up']))
     finally:
-        os.chdir(abs_path)
         Communicator.finalize()

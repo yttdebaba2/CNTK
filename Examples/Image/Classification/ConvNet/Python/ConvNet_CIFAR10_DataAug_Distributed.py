@@ -51,11 +51,11 @@ def create_image_mb_source(map_file, mean_file, train, total_number_of_samples):
     # deserializer
     return cntk.io.MinibatchSource(
         cntk.io.ImageDeserializer(map_file, cntk.io.StreamDefs(
-            features = cntk.io.StreamDef(field='image', transforms=transforms), # first column in map file is referred to as 'image'
-            labels   = cntk.io.StreamDef(field='label', shape=num_classes))),   # and second as 'label'
+            features=cntk.io.StreamDef(field='image', transforms=transforms), # first column in map file is referred to as 'image'
+            labels=cntk.io.StreamDef(field='label', shape=num_classes))),   # and second as 'label'
         randomize=train,
         max_samples=total_number_of_samples,
-        multithreaded_deserializer = True)
+        multithreaded_deserializer=True)
 
 # Create the network.
 def create_conv_network():

@@ -41,8 +41,8 @@ def create_reader(map_file, mean_file, is_training):
     ]
     # deserializer
     return cntk.io.MinibatchSource(cntk.io.ImageDeserializer(map_file, cntk.io.StreamDefs(
-        features = cntk.io.StreamDef(field='image', transforms=transforms), # first column in map file is referred to as 'image'
-        labels   = cntk.io.StreamDef(field='label', shape=num_classes))),   # and second as 'label'
+        features=cntk.io.StreamDef(field='image', transforms=transforms), # first column in map file is referred to as 'image'
+        labels=cntk.io.StreamDef(field='label', shape=num_classes))),   # and second as 'label'
         randomize=is_training)
 
 # Local Response Normalization layer. See Section 3.3 of the paper:

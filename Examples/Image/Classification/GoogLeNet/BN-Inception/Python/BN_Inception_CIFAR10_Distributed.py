@@ -30,13 +30,7 @@ config_path = abs_path
 model_path = os.path.join(abs_path, "Models")
 log_dir = None
 
-# model dimensions
-image_height = 32
-image_width  = 32
-num_channels = 3  # RGB
-num_classes  = 10
 model_name   = "BN-Inception_CIFAR-10.model"
-
 
 # Create trainer
 def create_trainer(network, epoch_size, num_epochs, minibatch_size, num_quantization_bits, progress_printer):
@@ -70,16 +64,15 @@ def create_trainer(network, epoch_size, num_epochs, minibatch_size, num_quantiza
     # Create trainer
     return Trainer(network['output'], (network['ce'], network['pe']), parameter_learner, progress_printer)
 
-def train_and_test(network, trainer, train_source, test_source, max_epochs, minibatch_size, epoch_size, restore, profiler_dir):
-
+def train_and_test(network, trainer, train_source, test_source, max_epochs, minibatch_size, epoch_size, restore, profiling):
     # define mapping from intput streams to network inputs
     input_map = {
         network['feature']: train_source.streams.features,
         network['label']: train_source.streams.labels
     }
 
-    if profiler_dir:
-        start_profiler(profiler_dir, True)
+    if profiling:
+        start_profiler(sync_gpu=True)
 
     training_session(
         trainer=trainer, mb_source=train_source,
@@ -93,12 +86,12 @@ def train_and_test(network, trainer, train_source, test_source, max_epochs, mini
         test_config=TestConfig(source=test_source, mb_size=minibatch_size)
     ).train()
 
-    if profiler_dir:
+    if profiling:
         stop_profiler()
 
 # Train and evaluate the network.
 def bn_inception_train_and_eval(train_data, test_data, mean_data, num_quantization_bits=32, epoch_size=50000, max_epochs=200, minibatch_size=None,
-                         restore=True, log_to_file=None, num_mbs_per_log=100, gen_heartbeat=False, scale_up=False, profiler_dir=None):
+                         restore=True, log_to_file=None, num_mbs_per_log=100, gen_heartbeat=False, scale_up=False, profiling=False):
     _cntk_py.set_computation_network_trace_level(0)
 
     # NOTE: scaling up minibatch_size increases sample throughput. In 8-GPU machine,
@@ -123,7 +116,7 @@ def bn_inception_train_and_eval(train_data, test_data, mean_data, num_quantizati
     train_source = create_image_mb_source(train_data, mean_data, True, total_number_of_samples=max_epochs * epoch_size)
     test_source = create_image_mb_source(test_data, mean_data, False, total_number_of_samples=FULL_DATA_SWEEP)
 
-    train_and_test(network, trainer, train_source, test_source, max_epochs, mb_size, epoch_size, restore, profiler_dir)
+    train_and_test(network, trainer, train_source, test_source, max_epochs, mb_size, epoch_size, restore, profiling)
 
 
 if __name__=='__main__':
@@ -133,7 +126,6 @@ if __name__=='__main__':
     parser.add_argument('-datadir', '--datadir', help='Data directory where the ImageNet dataset is located', required=False, default=data_path)
     parser.add_argument('-configdir', '--configdir', help='Config directory where this python script is located', required=False, default=config_path)
     parser.add_argument('-outputdir', '--outputdir', help='Output directory for checkpoints and models', required=False, default=None)
-    parser.add_argument('-profilerdir', '--profilerdir', help='Directory for saving profiler output', required=False, default=None)
     parser.add_argument('-logdir', '--logdir', help='Log file', required=False, default=None)
     parser.add_argument('-n', '--num_epochs', help='Total number of epochs to train', type=int, required=False, default='160')
     parser.add_argument('-m', '--minibatch_size', help='Minibatch size', type=int, required=False, default='64')
@@ -142,15 +134,14 @@ if __name__=='__main__':
     parser.add_argument('-s', '--scale_up', help='scale up minibatch size with #workers for better parallelism', type=bool, required=False, default='True')
     parser.add_argument('-r', '--restart', help='Indicating whether to restart from scratch (instead of restart from checkpoint file by default)', action='store_true')
     parser.add_argument('-device', '--device', type=int, help="Force to run the script on a specified device", required=False, default=None)
-
+    parser.add_argument('-profile', '--profile', help="Turn on profiling", action='store_true', default=False)
+    
     args = vars(parser.parse_args())
 
     if args['outputdir'] is not None:
         model_path = args['outputdir'] + "/models"
     if args['logdir'] is not None:
         log_dir = args['logdir']
-    if args['profilerdir'] is not None:
-        profiler_dir = args['profilerdir']
     if args['device'] is not None:
         cntk.device.set_default_device(cntk.device.gpu(args['device']))
 
@@ -159,6 +150,7 @@ if __name__=='__main__':
     if not os.path.isdir(data_path):
         raise RuntimeError("Directory %s does not exist" % data_path)
 
+    current_path = os.getcwd()
     os.chdir(data_path)
 
     mean_data = os.path.join(data_path, 'CIFAR-10_mean.xml')
@@ -167,16 +159,15 @@ if __name__=='__main__':
 
     try:
         bn_inception_train_and_eval(train_data, test_data, mean_data,
-                             epoch_size=args['epoch_size'],
-                             num_quantization_bits=args['quantized_bits'],
-                             max_epochs=args['num_epochs'],
-                             minibatch_size=args["minibatch_size"],
-                             restore=not args['restart'],
-                             log_to_file=args['logdir'],
-                             num_mbs_per_log=100,
-                             gen_heartbeat=True,
-                             scale_up=bool(args['scale_up']),
-                             profiler_dir=args['profilerdir'])
+                                    epoch_size=args['epoch_size'],
+                                    num_quantization_bits=args['quantized_bits'],
+                                    max_epochs=args['num_epochs'],
+                                    minibatch_size=args["minibatch_size"],
+                                    restore=not args['restart'],
+                                    log_to_file=args['logdir'],
+                                    num_mbs_per_log=100,
+                                    gen_heartbeat=True,
+                                    scale_up=bool(args['scale_up']),
+                                    profiling=args['profile'])
     finally:
-        os.chdir(abs_path)
         Communicator.finalize()
