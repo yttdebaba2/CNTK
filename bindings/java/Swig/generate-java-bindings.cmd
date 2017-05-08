@@ -21,7 +21,7 @@ echo Building java.
   echo Building Java binding failed!
   exit /B 1
 )
-"%JAVA_HOME%\bin\jar" -cvf cntk.jar .\com\microsoft\CNTK\*.class || (
+"%JAVA_HOME%\bin\jar" -cvf cntk.jar .\com\microsoft\CNTK\* || (
   echo Creating cntk.jar failed!
   exit /B 1
 )
