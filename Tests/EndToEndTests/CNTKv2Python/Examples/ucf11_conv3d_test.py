@@ -28,6 +28,11 @@ def test_ucf11_conv3d_error(device_id):
         pytest.skip('test only runs on GPU')
     try_set_default_device(cntk_device(device_id))
 
+    import subprocess
+    nvidiaSmiPath = r'c:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe'
+    out = subprocess.check_output([nvidiaSmiPath])
+    print(out)
+
     prepare_UCF11_data()
 
     base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
