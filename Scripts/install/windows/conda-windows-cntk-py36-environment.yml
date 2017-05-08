@@ -8,6 +8,7 @@ dependencies:
 - pandas-datareader=0.2.1=py36_0
 - pillow=3.4.2=py36_0
 - pip=9.0.1=py36_1
+- psutil=5.2.2=py36_0
 - python=3.6.0=0
 - pyyaml=3.12=py36_0
 - scipy=0.18.1=np111py36_0

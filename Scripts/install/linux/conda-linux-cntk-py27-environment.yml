@@ -11,6 +11,7 @@ dependencies:
 - pandas-datareader=0.2.1=py27_0
 - pillow=3.4.2=py27_0
 - pip=8.1.2=py27_0
+- psutil=5.2.2=py27_0
 - python=2.7.11=5
 - pyyaml=3.12=py27_0
 - scipy=0.18.1=np111py27_0

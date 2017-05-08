@@ -10,6 +10,7 @@ dependencies:
 - pandas-datareader=0.2.1=py35_0
 - pillow=3.4.2=py35_0
 - pip=8.1.2=py35_0
+- psutil=5.2.2=py35_0
 - python=3.5.2=0
 - pyyaml=3.12=py35_0
 - scipy=0.18.1=np111py35_0
