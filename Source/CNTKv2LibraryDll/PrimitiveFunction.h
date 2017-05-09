@@ -74,6 +74,7 @@ namespace CNTK
         {PrimitiveOpType::Select, L"Select"},
         {PrimitiveOpType::Splice, L"Splice"},
         {PrimitiveOpType::Combine, L"Combine"},
+		{PrimitiveOpType::NegSample, L"NegSample" },
         {PrimitiveOpType::RandomSample, L"RandomSample"},
         {PrimitiveOpType::RandomSampleInclusionFrequency, L"RandomSampleInclusionFrequency"},
         {PrimitiveOpType::ROIPooling, L"ROIPooling"},
@@ -305,7 +306,8 @@ namespace CNTK
         {
             return (OpType() == PrimitiveOpType::Dropout) ||
                    (OpType() == PrimitiveOpType::RandomSample) ||
-                   (OpType() == PrimitiveOpType::RandomSampleInclusionFrequency);
+                   (OpType() == PrimitiveOpType::RandomSampleInclusionFrequency) ||
+				   (OpType() == PrimitiveOpType::NegSample);
         }
 
         Dictionary GetState() const;

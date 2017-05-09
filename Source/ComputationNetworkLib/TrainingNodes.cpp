@@ -5,8 +5,265 @@
 
 #include "TrainingNodes.h"
 #include <boost/random/uniform_real_distribution.hpp>
+#include "ASGDHelper.h"
+#include "MPIWrapper.h"
+#include "ComputationNetwork.h"
+#include "TimerUtility.h"
+
+#include <functional>
+#include <thread>
+#include <unordered_map>
+#include <numeric>
+#include <algorithm>
+
+#ifndef CPUONLY
+#include <cuda_runtime.h>
+#pragma comment (lib, "cudart.lib")     // for cudaMemcpyAsync()
+#endif
 
 namespace Microsoft { namespace MSR { namespace CNTK {
+
+	#ifndef CPUONLY
+
+#include <cuda_runtime.h>
+
+// -----------------------------------------------------------------------
+// Error handling
+// -----------------------------------------------------------------------
+
+template <typename ERRTYPE>
+static void CudaCall(ERRTYPE retCode, const char* exprString, const char* libName, ERRTYPE successCode)
+{
+	if (retCode != successCode)
+	{
+		try
+		{
+#ifdef _WIN32
+			const char* hostname = getenv("COMPUTERNAME");
+#else
+			char hostname[HOST_NAME_MAX];
+			if (gethostname(hostname, HOST_NAME_MAX) != 0)
+				strcpy(hostname, "?");
+#endif
+			int currentCudaDevice;
+			cudaGetDevice(&currentCudaDevice);
+			Microsoft::MSR::CNTK::RuntimeError("%s failure %d; GPU=%d ; hostname=%s ; expr=%s", libName, (int)retCode, currentCudaDevice, hostname ? hostname : "?", exprString);
+		}
+		catch (const std::exception& e) // catch, log, and rethrow since CUDA code sometimes hangs in destruction, so we'd never get to see the error
+		{
+			std::cerr << e.what() << std::endl;
+			throw;
+		}
+	}
+}
+
+#define CUDA_CALL(expr)     (CudaCall((expr), #expr, "CUDA",     cudaSuccess))
+#endif // CPUONLY
+
+template<class ElemType>
+void NegSampleNodeBase<ElemType>::Validate(bool isFinalValidationPass)
+{
+    if (m_sizeOfSampledSet == 0)
+    {
+        InvalidArgument("Number of requested samples is zero.");
+    }
+
+    if (isFinalValidationPass)
+    {
+        // Sampling without replacement does only work when the number of requested classes is <= number of classes.
+        let& shape = Input(0)->GetSampleLayout();
+        let dims = shape.GetDims();
+        size_t nClasses = dims[0];
+        if (!m_allowDuplicates && nClasses <= m_sizeOfSampledSet)
+            InvalidArgument("For sampling without duplicates the number of requested samples (%lu) needs to be less than the number of classes (%lu).", m_sizeOfSampledSet, nClasses);
+    }
+}
+
+template<class ElemType>
+void NegSampleNodeBase<ElemType>::CopyTo(ComputationNodeBasePtr nodeP, const std::wstring& newName, const CopyNodeFlags flags) const
+{
+    Base::CopyTo(nodeP, newName, flags);
+    if (flags & CopyNodeFlags::copyNodeValue)
+    {
+        auto node = dynamic_pointer_cast<NegSampleNodeBase<ElemType>>(nodeP);
+        node->m_allowDuplicates  = m_allowDuplicates;
+        node->m_sizeOfSampledSet = m_sizeOfSampledSet;
+        node->SetRngState(GetRngSeed(), GetRngOffset());
+    }
+}
+
+template<class ElemType>
+void NegSampleNodeBase<ElemType>::Save(File& fstream) const
+{
+    Base::Save(fstream);
+    fstream << m_allowDuplicates;
+    fstream << m_sizeOfSampledSet;
+    RngUser::Save(fstream);
+}
+
+template<class ElemType>
+void NegSampleNodeBase<ElemType>::Load(File& fstream, size_t modelVersion)
+{
+    Base::Load(fstream, modelVersion);
+    fstream >> m_allowDuplicates;
+    fstream >> m_sizeOfSampledSet;
+    RngUser::Load(fstream, modelVersion);
+}
+
+template<class ElemType>
+void NegSampleNodeBase<ElemType>::UpdateWeightsPrefixSum()
+{
+    const Matrix<ElemType>& samplingWeights = Input(0)->ValueAsMatrix();
+    m_samplingWeightsPrefixSum.clear();
+    double runningWeightsSum = 0;
+    for (int iClass = 0; iClass < samplingWeights.GetNumRows(); iClass++)
+    {
+        ElemType currentWeight = samplingWeights.GetValue(iClass, 0);
+        if (currentWeight < 0)
+            InvalidArgument("Sampling weights contain negative number %f.", currentWeight);
+		currentWeight = ElemType(pow(currentWeight, 0.75));
+        runningWeightsSum += currentWeight;
+        m_samplingWeightsPrefixSum.push_back(runningWeightsSum);
+    }
+}
+
+// Runs the sampling returning a vector with the id's of the samples. The parameter nTries is used to return the number of draws that was needed
+// to get the expected number of samples.
+template<class ElemType>
+const std::vector<size_t> NegSampleNodeBase<ElemType>::RunSampling(size_t& nTries, std::unordered_set<int> positive)
+{
+    boost::random::uniform_real_distribution<double> r(0, m_samplingWeightsPrefixSum.back());
+    std::unordered_set<int> alreadySampled;
+    std::vector<size_t> samples;
+    CPURNGHandle* cpuRNGHandle = dynamic_cast<CPURNGHandle*>(&GetRNGHandle(CPUDEVICE));
+	
+    // find random samples using the specified weight
+    if (m_allowDuplicates)
+        nTries = m_sizeOfSampledSet;
+    else
+        nTries = 0; // just initialize and count how many tries we need.
+
+    auto offset = GetRngOffset();
+    while (samples.size() < m_sizeOfSampledSet)
+    {
+        double randomValue = r(cpuRNGHandle->Generator());
+        offset++;
+        // Find the first index where value[idx] >= randomValue.
+        auto lower = std::lower_bound(m_samplingWeightsPrefixSum.begin(), m_samplingWeightsPrefixSum.end(), randomValue);
+        int idx = (int)(lower - m_samplingWeightsPrefixSum.begin());
+
+		if (positive.find(idx) != positive.end()) continue;
+
+        if (m_allowDuplicates)
+            samples.push_back(idx);
+        else
+        {
+            // Sampling without replacement: each value can be sampled at most once. 
+            // The implementation below using rejection sampling is problematic.
+            // E.g if first class has probability p = 0.999 we typically will have to sample 1000 times or more to hit another class.
+            // BUGBUG Alternative implementions, e.g:
+            // * Weighted Random Sampling with Reservoir: http://utopia.duth.gr/~pefraimi/research/data/2007EncOfAlg.pdf
+            // * Binary tree with classes as leafes and branch probs on non-leafes.
+            // * As in numpy: https://github.com/numpy/numpy/blob/master/numpy/random/mtrand/mtrand.pyx#L1440
+            nTries++;
+            if (alreadySampled.find(idx) != alreadySampled.end()) continue;
+            else
+            {
+                samples.push_back(idx);
+                alreadySampled.insert(idx);
+            }
+        }
+    }
+    UpdateRngOffset(offset);
+    return samples;
+}
+
+template<class ElemType>
+void NegSampleNode<ElemType>::ForwardPropNonLooping()
+{
+    Base::UpdateWeightsPrefixSum();
+	
+    if (ValueAsMatrix().GetMatrixType() != SPARSE)
+    {
+        // BUGBUG: matrix type should be configured during validation
+        // Note: We allocate a new one instead of switching the type in place since switching in place may
+        // affect other nodes who share this matrix due to memory sharing
+        auto newSparseValueMatrix = std::make_shared<Matrix<ElemType>>(ValueAsMatrix().GetNumRows(), ValueAsMatrix().GetNumCols(), CPUDEVICE, SPARSE, matrixFormatSparseCSC);
+#ifdef _MSC_VER
+        ValuePtrRef() = newSparseValueMatrix;
+#else
+        this->template ValuePtrRef() = newSparseValueMatrix;
+#endif
+    }
+
+    Matrix<ElemType>& valueMatrix = ValueAsMatrix();
+//	ElemType* data;
+//	data = valueMatrix.Data();
+//	int * index;
+//	index = valueMatrix.GetIndex();
+    // TODO: Should we prepare the CSC data directly on the CPU and move it in one go?
+    // Currently the reader will place the data onto the GPU. It will then be pulled on-demand to the CPU once (and cached there).
+    valueMatrix.TransferToDeviceIfNotThere(CPUDEVICE, /*ismoved =*/ true/*means: BOTH state not ok */, /*emptyTransfer =*/ true, /*updatePreferredDevice =*/ true);
+    valueMatrix.Reset();
+
+	FrameRange fr(InputRef(1).GetMBLayout());
+	auto batchsize = fr.GetSequenceRange().second;
+	auto in = InputRef(1).ValuePtrRef();
+#ifndef CPUONLY
+	int* index = new int[batchsize];
+	cudaMemcpy(index, (*in).GetIndex(), batchsize*sizeof(int), cudaMemcpyDeviceToHost);
+	if(index == NULL)
+		index = (*in).GetIndex();
+#else
+	int * index;
+	index = (*in).GetIndex();
+#endif
+	std::unordered_set<int> positive;
+	for (int i = 0; i < batchsize; i++) {
+		positive.insert(index[i]);
+	}
+    // Get vector with indices of randomly sampled classes
+    const std::vector<size_t> samples = GetWeightedSamples(positive);
+
+    // Set columns of (sparse) result matrix as indicator vectors
+    for (size_t i = 0; i < Base::m_sizeOfSampledSet; i++)
+    {
+        int sample = samples[i];
+        valueMatrix.SetValue(sample, i, 1);
+    }
+}
+
+template<class ElemType>
+const std::vector<size_t> NegSampleNode<ElemType>::GetWeightedSamples(std::unordered_set<int> positive)
+{
+    size_t dummy;
+    // Here we are not interested in the number of sampling tries needed, which is returned in the parameter.
+    return Base::RunSampling(dummy, positive);
+}
+
+template<class ElemType>
+void NegSampleNode<ElemType>::Validate(bool isFinalValidationPass)
+{
+    Base::Validate(isFinalValidationPass);
+    m_pMBLayout = nullptr;
+
+    let& shape = Input(0)->GetSampleLayout();
+    let dims = shape.GetDims();
+    size_t numClasses = dims[0];
+
+    // Output: a (sparse) matrix containing m_sizeOfSampledSet columns of 1-hot vectors specifiying the sampled classes.
+    SetDims(TensorShape(numClasses, Base::m_sizeOfSampledSet), false);
+}
+
+template<class ElemType>
+bool NegSampleNode<ElemType>::IsOutOfDateWrtInputs() const
+{
+    // We need to recompute the result for each mini-batch even if the weight vector didn't change.
+    return true;
+}
+
+template class NegSampleNode<float>;
+template class NegSampleNode<double>;
 
 template<class ElemType>
 void RandomSampleNodeBase<ElemType>::Validate(bool isFinalValidationPass)

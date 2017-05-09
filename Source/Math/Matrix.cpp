@@ -689,6 +689,28 @@ ElemType* Matrix<ElemType>::Data() const
 }
 
 template <class ElemType>
+int* Matrix<ElemType>::GetIndex() const
+{
+	DISPATCH_MATRIX_ON_FLAG(this,
+		nullptr,
+		NOT_IMPLEMENTED,
+		NOT_IMPLEMENTED,
+		return m_CPUSparseMatrix->MajorIndexLocation(),
+		return m_GPUSparseMatrix->MajorIndexLocation());
+}
+
+template <class ElemType>
+size_t Matrix<ElemType>::NzCount() const
+{
+	DISPATCH_MATRIX_ON_FLAG(this,
+		nullptr,
+		NOT_IMPLEMENTED,
+		NOT_IMPLEMENTED,
+		return m_CPUSparseMatrix->NzCount(),
+		return m_GPUSparseMatrix->NzCount());
+}
+
+template <class ElemType>
 ElemType* Matrix<ElemType>::CopyToArray() const
 {
     DISPATCH_MATRIX_ON_FLAG(this,

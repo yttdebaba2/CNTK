@@ -203,6 +203,14 @@ namespace CNTK
                     }
                     opType = PrimitiveOpType::Slice;
                 }
+				else if (node->OperationName() == OperationNameOf(NegSampleNode))
+				{
+					auto negSampleNode = node->As<NegSampleNode<ElementType>>();
+					primitiveFunctionConfigParameters[PrimitiveFunction::AttributeNameAllowDuplicates] = negSampleNode->GetAllowDuplicates();
+					primitiveFunctionConfigParameters[PrimitiveFunction::AttributeNameNumSamples] = negSampleNode->GetNumSamples();
+
+					opType = PrimitiveOpType::NegSample;
+				}
                 else if (node->OperationName() == OperationNameOf(RandomSampleNode))
                 {
                     auto randomSampleNode = node->As<RandomSampleNode<ElementType>>();

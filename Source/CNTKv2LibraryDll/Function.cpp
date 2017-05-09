@@ -1137,6 +1137,21 @@ namespace CNTK
         return AsComposite(MakeSharedObject<PrimitiveFunction>(op, operands, std::move(opConfig), name), name);
     }
 
+	FunctionPtr NegSample(const Variable& dict, const Variable& word, size_t numSamples, bool allowDuplicates, unsigned long seed, const std::wstring& name)
+	{
+		auto additionalProperties = Dictionary();
+		additionalProperties[PrimitiveFunction::AttributeNameNumSamples] = numSamples;
+		additionalProperties[PrimitiveFunction::AttributeNameAllowDuplicates] = allowDuplicates;
+
+		if (seed == SentinelValueForAutoSelectRandomSeed)
+			seed = Internal::GenerateRandomSeed();
+
+		additionalProperties[PrimitiveFunction::AttributeNameRngSeed] = size_t(seed);
+		additionalProperties[PrimitiveFunction::AttributeNameRngOffset] = size_t(0);
+
+		return BinaryOp(PrimitiveOpType::NegSample, dict, word, std::move(additionalProperties), name);
+	}
+
     FunctionPtr Plus(const Variable& leftOperand, const Variable& rightOperand, const std::wstring& name)
     {
         return BinaryOp(PrimitiveOpType::Plus, leftOperand, rightOperand, Dictionary(), name);

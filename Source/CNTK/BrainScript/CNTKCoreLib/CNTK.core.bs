@@ -530,6 +530,12 @@ CNTK2 = [
     Pass(_, tag='') = new ComputationNode [ operation = 'Pass' ; inputs = _AsNodes (_) /*plus the function args*/ ]
     Identity = Pass
 
+	NegSample(dict, word, numSamples, sampleWithReplacement, tag='') = new ComputationNode [
+																					operation = 'NegSample';
+																					sizeOfSampledSet = numSamples;
+																					allowDuplicates = sampleWithReplacement;
+																					inputs = _AsNodes (dict:word)/*plus the function args*/ ]
+
     // The value of GetRandomSample(weights /* vector of length nClasses */, numSamples, sampleWithReplacement) randomly samples numSamples using the specified sampling weights. 
     // The result is a sparse matrix of num samples one-hot vectors as columns.
     GetRandomSample(_ ,numSamples, sampleWithReplacement, tag='') = new ComputationNode [

@@ -3519,6 +3519,8 @@ namespace CNTK
     ///
     /// Create an instance of the random_sample operation on specified sampling weights input vector
     ///
+	CNTK_API FunctionPtr NegSample(const Variable& dict, const Variable& word, size_t numSamples, bool allowDuplicates, unsigned long seed = SentinelValueForAutoSelectRandomSeed, const std::wstring& name = L"");
+
     CNTK_API FunctionPtr RandomSample(const Variable& operand, size_t numSamples, bool allowDuplicates, unsigned long seed = SentinelValueForAutoSelectRandomSeed, const std::wstring& name = L"");
 
     ///

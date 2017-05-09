@@ -1233,6 +1233,102 @@ protected:
 };
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------
+// NegSampleNodeBase(samplingWeights, sizeOfSampledSet, allowDuplicates): 
+// Base class for NegSampleNode and NegSampleInclusionFrequencyNode.
+// Provides random sampling functionality.
+//
+// Parameters:
+// * Input(0) Sampling weight vector: Matrix of shape [numClasses x 1] providing sampling weights >= 0.
+// * sizeOfSampledSet: Size of the sampled set.
+// * allowDuplicates: controls if sampled set is allowed to contain duplicates.
+// --------------------------------------------------------------------------------------------------------------------------------------------------
+template <class ElemType>
+class NegSampleNodeBase : public ComputationNodeNonLooping<ElemType>, public NumInputs<2>, public RngUser
+{
+	typedef ComputationNodeNonLooping<ElemType> Base; UsingComputationNodeMembersBoilerplate;
+	static const std::wstring TypeName() { return L"NegSampleNodeBase"; }
+
+public:
+	NegSampleNodeBase(DEVICEID_TYPE deviceId, const wstring& name, size_t sizeOfSampledSet = 0, bool allowDuplicates = false)
+		: Base(deviceId, name), m_sizeOfSampledSet(sizeOfSampledSet), m_allowDuplicates(allowDuplicates)
+	{
+		SetRngState(CreateUniqId());
+	}
+
+	NegSampleNodeBase(const ScriptableObjects::IConfigRecordPtr configp)
+		: NegSampleNodeBase(CPUDEVICE, L"<placeholder>", configp->Get(L"sizeOfSampledSet"), configp->Get(L"allowDuplicates"))
+	{
+		AttachInputsFromConfig(configp, this->GetExpectedNumInputs());
+	}
+
+	virtual void CopyTo(ComputationNodeBasePtr nodeP, const std::wstring& newName, const CopyNodeFlags flags) const override;
+
+	virtual void Save(File& fstream) const override;
+	virtual void Load(File& fstream, size_t modelVersion) override;
+
+protected:
+
+	void UpdateWeightsPrefixSum();
+
+	// Runs the sampling returning a vector with the id's of the samples. The parameter nTries is used to return the number of draws that was needed
+	// to get the expected number of samples.
+	const std::vector<size_t> RunSampling(size_t& nTries, std::unordered_set<int> positive);
+
+public:
+	virtual void /*ComputationNode::*/ BackpropToNonLooping(size_t inputIndex) override {} // This node does not propagate gradients.
+	virtual void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override;
+	virtual bool OutputUsedInComputingInputNodesGradients() const override { return false; }
+	virtual bool InputUsedInComputingInputNodesGradients(size_t /*childIndex*/) const override { return false; }
+	virtual void /*ComputationNode::*/ ForwardPropNonLooping() override {}
+	virtual bool GetAllowDuplicates() const { return m_allowDuplicates; }
+	virtual size_t GetNumSamples() const { return m_sizeOfSampledSet; }
+
+protected:
+	bool m_allowDuplicates; // The node can create samples allowing for duplicates (sampling with replacement) or not (sampling without replacement).
+	size_t m_sizeOfSampledSet; // Requested size of sample in case of run-mode = CREATE_SAMPLES.
+	std::vector<double> m_samplingWeightsPrefixSum;
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------
+// NegSampleNode(samplingWeights, sizeOfSampledSet, allowDuplicates):
+// The node's value is a set of sizeOfSampledSet random samples represented as a (sparse) matrix 
+// of shape [numClasses x sizeOfSampledSet] where numClasses is the number of classes (categories) to choose from.
+// The output has no dynamic axis.
+// The samples are drawn with a probability proportional to the weights w of the vector 'samplingWeights' : p(w_i) = w_i / sum_k(w_k)
+// We get one set of samples for per minibatch.
+// Multiply a 'numClasses' - dimensional vector with this matrix to randomly sample 'sizeOfSampledSet' values from it.
+// The resulting vector has a dimension of 'sizeOfSampledSet'.Currently, only rank - 1 tensors are supported.
+// Intended uses are e.g. sampled softmax, noise contrastive estimation etc.
+//
+// Parameters:
+// * Input(0): Sampling weight vector. Matrix of shape [numClasses x 1] providing sampling weights >= 0.
+// * sizeOfSampledSet: Size of the sampled set.
+// * allowDuplicates: controls if sampled set is allowed to contain duplicates.
+// --------------------------------------------------------------------------------------------------------------------------------------------------
+template<class ElemType>
+class NegSampleNode : public NegSampleNodeBase<ElemType>
+{
+	typedef NegSampleNodeBase<ElemType> Base; UsingComputationNodeMembersBoilerplate;
+	static const std::wstring TypeName() { return L"NegSample"; }
+
+public:
+	NegSampleNode(DEVICEID_TYPE deviceId, const wstring& name, size_t sizeOfSampledSet = 0, bool allowDuplicates = false)
+		: Base(deviceId, name, sizeOfSampledSet, allowDuplicates)
+	{}
+
+	NegSampleNode(const ScriptableObjects::IConfigRecordPtr configp)
+		: NegSampleNode(CPUDEVICE, L"<placeholder>", configp->Get(L"sizeOfSampledSet"), configp->Get(L"allowDuplicates"))
+	{
+		AttachInputsFromConfig(configp, this->GetExpectedNumInputs());
+	}
+
+	virtual void /*ComputationNode::*/ ForwardPropNonLooping() override;
+	const std::vector<size_t> GetWeightedSamples(std::unordered_set<int> positive);
+	virtual void /*ComputationNodeBase::*/ Validate(bool isFinalValidationPass) override;
+	virtual bool IsOutOfDateWrtInputs() const override;
+};
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------
 // RandomSampleNodeBase(samplingWeights, sizeOfSampledSet, allowDuplicates): 
 // Base class for RandomSampleNode and RandomSampleInclusionFrequencyNode.
 // Provides random sampling functionality.

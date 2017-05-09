@@ -856,6 +856,25 @@ namespace CNTK
                             outputShape = SpliceOutputShape(m_inputs, spliceAxis.StaticAxisIndex());
                             break;
                         }
+						case PrimitiveOpType::NegSample:
+						{
+							auto numSamples = m_attributes[PrimitiveFunction::AttributeNameNumSamples].Value<size_t>();
+							auto allowDuplicates = m_attributes[PrimitiveFunction::AttributeNameAllowDuplicates].Value<bool>();
+
+							if (numSamples == 0)
+								InvalidArgument("NegSample: Number of requested samples is zero.");
+
+							let& shape = m_inputs[0].Shape();
+							size_t numClasses = shape.Dimensions()[0];
+
+							if (numClasses != NDShape::InferredDimension && !allowDuplicates && numClasses <= numSamples)
+								InvalidArgument("NegSample: For sampling without duplicates the number of requested samples (%lu) needs to be less than the number of classes (%lu).", numSamples, numClasses);
+
+							vector<size_t> dimensions{ numClasses, numSamples };
+							outputShape = NDShape(dimensions);
+
+							break;
+						}
                         case PrimitiveOpType::RandomSample:
                         case PrimitiveOpType::RandomSampleInclusionFrequency:
                         {
